@@ -1,0 +1,86 @@
+[project]
+name = "llamaindex-doubleword"
+version = "0.1.0"
+description = "An integration package connecting Doubleword and LlamaIndex."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+authors = [{ name = "Doubleword", email = "info@doubleword.ai" }]
+keywords = ["llamaindex", "doubleword", "llm", "openai", "batch", "embeddings"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "llama-index-core>=0.12.0",
+    "llama-index-llms-openai-like>=0.3.0",
+    "llama-index-embeddings-openai>=0.3.0",
+    "openai>=2.0.0,<3",
+    "autobatcher>=0.4.0",
+]
+
+[project.urls]
+Homepage = "https://doubleword.ai"
+Documentation = "https://docs.doubleword.ai"
+Repository = "https://github.com/doublewordai/llamaindex-doubleword"
+Issues = "https://github.com/doublewordai/llamaindex-doubleword/issues"
+
+[dependency-groups]
+test = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "pytest-socket>=0.7",
+]
+lint = [
+    "ruff>=0.6",
+]
+typing = [
+    "mypy>=1.10",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["llamaindex_doubleword"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "llamaindex_doubleword/**/*.py",
+    "llamaindex_doubleword/py.typed",
+    "README.md",
+    "LICENSE",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+    "T20", # flake8-print
+]
+ignore = ["E501"] # line length handled by formatter
+
+[tool.pytest.ini_options]
+addopts = "--strict-markers --strict-config --durations=5"
+asyncio_mode = "auto"
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
