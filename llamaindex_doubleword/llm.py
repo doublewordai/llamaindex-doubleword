@@ -59,7 +59,7 @@ class DoublewordLLM(OpenAILike):
     """
 
     is_chat_model: bool = True
-    is_function_calling_model: bool = False
+    is_function_calling_model: bool = True
     context_window: int = 128000
 
     def __init__(self, **kwargs: Any) -> None:
