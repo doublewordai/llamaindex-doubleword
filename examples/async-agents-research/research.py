@@ -12,10 +12,11 @@ Edit TOPIC and MODEL below to change the research subject and model.
 
 import asyncio
 import json
+import sys
 import time
 from pathlib import Path
 
-from llama_index.core.agent.workflow import AgentWorkflow
+from llama_index.core.agent.workflow import AgentWorkflow, FunctionAgent
 from llama_index.core.tools import FunctionTool
 
 from llamaindex_doubleword import DoublewordLLMBatch
@@ -27,8 +28,8 @@ from tools import fetch_urls, format_results_for_context, search as serper_searc
 # Configuration
 # ---------------------------------------------------------------------------
 
-TOPIC = "quantum computing error correction"
-MODEL = "Qwen/Qwen3.5-35B-A3B-FP8"
+TOPIC = sys.argv[1] if len(sys.argv) > 1 else "benefits of batch inference"
+MODEL = "Qwen/Qwen3.5-397B-A17B-FP8"
 MAX_DEPTH = 3
 MAX_ITERATIONS = 8
 OUTPUT_DIR = Path("results") / TOPIC.lower().replace(" ", "-")[:50]
@@ -358,11 +359,17 @@ async def run_agent(
     if session_ctx:
         full_system += f"\n\n{session_ctx}"
 
-    agent = AgentWorkflow.from_tools_or_functions(
-        tools,
-        llm=llm,
-        system_prompt=full_system,
-        max_steps=MAX_ITERATIONS,
+    agent = AgentWorkflow(
+        agents=[
+            FunctionAgent(
+                name="Agent",
+                description="A research agent.",
+                tools=tools,
+                llm=llm,
+                system_prompt=full_system,
+                streaming=False,
+            )
+        ],
     )
 
     user_text = (

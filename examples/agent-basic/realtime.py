@@ -16,7 +16,7 @@ from llama_index.core.tools import FunctionTool
 
 from llamaindex_doubleword import DoublewordLLM
 
-MODEL = "Qwen/Qwen3-14B-FP8"
+MODEL = "Qwen/Qwen3.5-397B-A17B-FP8"
 
 QUERIES = [
     "What is 137 * 49?",

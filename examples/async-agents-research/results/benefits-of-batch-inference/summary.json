@@ -1,0 +1,10 @@
+{
+  "topic": "benefits of batch inference",
+  "model": "Qwen/Qwen3.5-397B-A17B-FP8",
+  "total_agents": 1,
+  "by_status": {
+    "completed": 1
+  },
+  "max_depth": 0,
+  "elapsed_seconds": 81.93697366700508
+}
