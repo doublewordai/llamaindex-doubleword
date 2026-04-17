@@ -140,6 +140,7 @@ class DoublewordLLMBatch(DoublewordLLM):
             "but completes faster. Forwarded to autobatcher.BatchOpenAI."
         ),
     )
+    _batch_client: Any = None
 
     @model_validator(mode="after")
     def _install_autobatcher(self) -> DoublewordLLMBatch:
@@ -165,14 +166,13 @@ class DoublewordLLMBatch(DoublewordLLM):
             if "default_headers" in self.additional_kwargs:
                 client_kwargs["default_headers"] = self.additional_kwargs["default_headers"]
 
-        batch_client = BatchOpenAI(**client_kwargs)
-
-        # LlamaIndex's OpenAI LLM stores the async client at _aclient
-        # (a Pydantic PrivateAttr). Replace it with the BatchOpenAI instance
-        # so async calls go through the batch pipeline.
-        self._aclient = batch_client
+        self._batch_client = BatchOpenAI(**client_kwargs)
 
         return self
+
+    def _get_aclient(self) -> Any:
+        """Override to return the BatchOpenAI client instead of a regular AsyncOpenAI."""
+        return self._batch_client
 
     def complete(self, *args: Any, **kwargs: Any) -> Any:
         raise NotImplementedError(

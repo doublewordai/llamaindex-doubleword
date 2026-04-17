@@ -113,6 +113,7 @@ class DoublewordEmbeddingBatch(DoublewordEmbedding):
             "but completes faster. Forwarded to autobatcher.BatchOpenAI."
         ),
     )
+    _batch_client: Any = None
 
     @model_validator(mode="after")
     def _install_autobatcher(self) -> DoublewordEmbeddingBatch:
@@ -135,14 +136,13 @@ class DoublewordEmbeddingBatch(DoublewordEmbedding):
         if self.max_retries is not None and self.max_retries > 0:
             client_kwargs["max_retries"] = self.max_retries
 
-        batch_client = BatchOpenAI(**client_kwargs)
-
-        # LlamaIndex's OpenAI embedding stores the async client at _aclient
-        # (a Pydantic PrivateAttr). Replace it with the BatchOpenAI instance
-        # so async calls go through the batch pipeline.
-        self._aclient = batch_client
+        self._batch_client = BatchOpenAI(**client_kwargs)
 
         return self
+
+    def _get_aclient(self) -> Any:
+        """Override to return the BatchOpenAI client instead of a regular AsyncOpenAI."""
+        return self._batch_client
 
     def get_text_embedding(self, text: str, **kwargs: Any) -> list[float]:
         raise NotImplementedError(
