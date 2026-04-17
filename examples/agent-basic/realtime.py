@@ -1,12 +1,13 @@
-"""Run a basic tool-calling agent with DoublewordLLM (sync, real-time).
+"""Run a basic tool-calling agent with DoublewordLLM (real-time).
 
-A simple agent — LLM + calculator tool — invoked synchronously through
-Doubleword's real-time `/v1/chat/completions` endpoint. Runs a single query
-and a sequential batch of five, printing wall time for each.
+A simple agent — LLM + calculator tool — invoked through Doubleword's
+real-time `/v1/chat/completions` endpoint. Runs a single query and a
+sequential batch of five, printing wall time for each.
 
 Requires DOUBLEWORD_API_KEY in the environment (or ~/.dw/credentials.toml).
 """
 
+import asyncio
 import os
 import time
 
@@ -39,7 +40,7 @@ def calculator(expression: str) -> str:
         return f"error: {e}"
 
 
-def main() -> None:
+async def main() -> None:
     if not os.environ.get("DOUBLEWORD_API_KEY") and not (
         os.path.exists(os.path.expanduser("~/.dw/credentials.toml"))
         and os.path.exists(os.path.expanduser("~/.dw/config.toml"))
@@ -56,7 +57,7 @@ def main() -> None:
     )
 
     print("=" * 60)
-    print("DoublewordLLM (real-time, sync)")
+    print("DoublewordLLM (real-time)")
     print(f"Model: {MODEL}")
     print("=" * 60)
     print()
@@ -64,7 +65,7 @@ def main() -> None:
     # Single query
     print("--- single query ---")
     start = time.monotonic()
-    response = agent.run(QUERIES[0])
+    response = await agent.run(QUERIES[0])
     elapsed = time.monotonic() - start
     answer = str(response)
     print(f"  wall time: {elapsed:5.1f}s")
@@ -72,12 +73,12 @@ def main() -> None:
     print(f"  A: {answer[:120]}")
     print()
 
-    # Sequential batch of N queries
+    # Sequential queries
     print(f"--- {len(QUERIES)} queries (sequential) ---")
     start = time.monotonic()
     answers = []
     for q in QUERIES:
-        resp = agent.run(q)
+        resp = await agent.run(q)
         answers.append(str(resp))
     elapsed = time.monotonic() - start
     print(f"  wall time: {elapsed:5.1f}s")
@@ -88,4 +89,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
