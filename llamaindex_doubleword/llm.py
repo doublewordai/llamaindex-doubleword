@@ -167,10 +167,10 @@ class DoublewordLLMBatch(DoublewordLLM):
 
         batch_client = BatchOpenAI(**client_kwargs)
 
-        # OpenAILike (via OpenAI LLM) stores the async client at _async_client.
-        # Replace it with the BatchOpenAI instance so async calls go through
-        # the batch pipeline.
-        self._async_client = batch_client
+        # LlamaIndex's OpenAI LLM stores the async client at _aclient
+        # (a Pydantic PrivateAttr). Replace it with the BatchOpenAI instance
+        # so async calls go through the batch pipeline.
+        self._aclient = batch_client
 
         return self
 

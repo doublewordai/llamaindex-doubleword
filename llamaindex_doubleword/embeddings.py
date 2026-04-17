@@ -137,9 +137,10 @@ class DoublewordEmbeddingBatch(DoublewordEmbedding):
 
         batch_client = BatchOpenAI(**client_kwargs)
 
-        # OpenAIEmbedding stores the async client at _async_client.
-        # Replace it so async calls go through the batch pipeline.
-        self._async_client = batch_client
+        # LlamaIndex's OpenAI embedding stores the async client at _aclient
+        # (a Pydantic PrivateAttr). Replace it with the BatchOpenAI instance
+        # so async calls go through the batch pipeline.
+        self._aclient = batch_client
 
         return self
 
