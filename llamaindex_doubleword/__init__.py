@@ -9,11 +9,13 @@ from importlib import metadata
 
 from llamaindex_doubleword.embeddings import (
     DoublewordEmbedding,
+    DoublewordEmbeddingAsync,
     DoublewordEmbeddingBatch,
 )
 from llamaindex_doubleword.llm import (
     DEFAULT_DOUBLEWORD_API_BASE,
     DoublewordLLM,
+    DoublewordLLMAsync,
     DoublewordLLMBatch,
 )
 
@@ -26,8 +28,10 @@ del metadata
 __all__ = [
     "DEFAULT_DOUBLEWORD_API_BASE",
     "DoublewordEmbedding",
+    "DoublewordEmbeddingAsync",
     "DoublewordEmbeddingBatch",
     "DoublewordLLM",
+    "DoublewordLLMAsync",
     "DoublewordLLMBatch",
     "__version__",
 ]

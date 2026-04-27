@@ -1,6 +1,6 @@
 """Doubleword LLM implementations for LlamaIndex.
 
-Two classes are exposed:
+Three classes are exposed:
 
 * :class:`DoublewordLLM` — a thin subclass of
   :class:`llama_index.llms.openai_like.OpenAILike` that targets Doubleword's
@@ -10,10 +10,13 @@ Two classes are exposed:
 
 * :class:`DoublewordLLMBatch` — same surface, but the async client is replaced
   with :class:`autobatcher.BatchOpenAI`, which transparently collects concurrent
-  requests and submits them through Doubleword's batch API. This is the only
-  way to access models that Doubleword exposes solely via the batch endpoint,
-  and it is the recommended choice for workflows that fan out many parallel
-  calls.
+  requests and submits them through Doubleword's batch API with a 24-hour
+  completion window (the deepest discount tier). The only way to access models
+  Doubleword exposes solely via batch.
+
+* :class:`DoublewordLLMAsync` — same machinery, but pinned to the
+  **1-hour async (flex)** completion window. Use this when batch turnaround
+  is too slow but realtime cost is too high.
 """
 
 from __future__ import annotations
@@ -142,9 +145,19 @@ class DoublewordLLMBatch(DoublewordLLM):
     )
     _batch_client: Any = None
 
+    def _autobatcher_client_class(self) -> Any:
+        """Return the autobatcher client class to instantiate.
+
+        Subclasses (:class:`DoublewordLLMAsync`) override this to pick
+        :class:`autobatcher.AsyncOpenAI` instead.
+        """
+        from autobatcher import BatchOpenAI
+
+        return BatchOpenAI
+
     @model_validator(mode="after")
     def _install_autobatcher(self) -> DoublewordLLMBatch:
-        from autobatcher import BatchOpenAI
+        client_class = self._autobatcher_client_class()
 
         api_key: str | None = self.api_key
         if api_key is None:
@@ -166,7 +179,7 @@ class DoublewordLLMBatch(DoublewordLLM):
             if "default_headers" in self.additional_kwargs:
                 client_kwargs["default_headers"] = self.additional_kwargs["default_headers"]
 
-        self._batch_client = BatchOpenAI(**client_kwargs)
+        self._batch_client = client_class(**client_kwargs)
 
         return self
 
@@ -213,3 +226,50 @@ class DoublewordLLMBatch(DoublewordLLM):
             "return all at once when the batch completes. Use `DoublewordLLM` "
             "for streaming, or `acomplete` / `achat` for batched inference."
         )
+
+
+class DoublewordLLMAsync(DoublewordLLMBatch):
+    """Doubleword LLM on the **1-hour async (flex)** completion window.
+
+    Identical surface to :class:`DoublewordLLMBatch`, but pinned to
+    Doubleword's flex tier: results return within an hour instead of next-day,
+    at a price between realtime and 24-hour batch. Backed by
+    :class:`autobatcher.AsyncOpenAI` (a thin subclass of ``BatchOpenAI`` with
+    a 1h default), so the batching/fan-out semantics are unchanged.
+
+    Pick this when you need results within minutes-to-an-hour and still want
+    significant cost savings over realtime inference.
+
+    **Async-only**, like its parent.
+
+    Example:
+        .. code-block:: python
+
+            import asyncio
+            from llamaindex_doubleword import DoublewordLLMAsync
+
+            llm = DoublewordLLMAsync(model="your-model")
+
+            async def main():
+                results = await asyncio.gather(*[
+                    llm.acomplete(f"Summarize chapter {i}") for i in range(50)
+                ])
+                for r in results:
+                    print(r.text)
+
+            asyncio.run(main())
+    """
+
+    completion_window: Literal["24h", "1h"] = Field(
+        default="1h",
+        description=(
+            "Doubleword completion window. Defaults to '1h' (flex/async tier). "
+            "Override to '24h' to fall back to the deepest-discount batch tier. "
+            "Forwarded to autobatcher.AsyncOpenAI."
+        ),
+    )
+
+    def _autobatcher_client_class(self) -> Any:
+        from autobatcher import AsyncOpenAI
+
+        return AsyncOpenAI

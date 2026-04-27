@@ -135,17 +135,53 @@ llm = DoublewordLLMBatch(
 
 The same arguments are available on `DoublewordEmbeddingBatch`.
 
+### `DoublewordLLMAsync` (1-hour flex tier)
+
+A thin subclass of `DoublewordLLMBatch` pinned to Doubleword's **flex
+(1-hour)** completion window. Backed by `autobatcher.AsyncOpenAI` rather
+than `BatchOpenAI`. Use this when 24-hour batch turnaround is too slow but
+realtime cost is too high — typical for fan-out workflows that need results
+within minutes-to-an-hour.
+
+```python
+import asyncio
+from llamaindex_doubleword import DoublewordLLMAsync
+
+llm = DoublewordLLMAsync(model="your-model")  # completion_window="1h" by default
+
+async def main():
+    results = await asyncio.gather(*[
+        llm.acomplete(f"Summarize chapter {i}") for i in range(50)
+    ])
+    for r in results:
+        print(r.text)
+
+asyncio.run(main())
+```
+
+All the autobatcher tuning knobs above apply unchanged. The only difference
+from `DoublewordLLMBatch` is the default `completion_window` (`"1h"` vs
+`"24h"`); the same `DoublewordEmbeddingAsync` exists on the embeddings side.
+
 ## Embeddings
 
 ```python
-from llamaindex_doubleword import DoublewordEmbedding, DoublewordEmbeddingBatch
+from llamaindex_doubleword import (
+    DoublewordEmbedding,
+    DoublewordEmbeddingAsync,
+    DoublewordEmbeddingBatch,
+)
 
 embed = DoublewordEmbedding(model_name="your-embedding-model")
 vec = embed.get_text_embedding("hello world")
 
-# Or, transparently batched:
+# Or, transparently batched (24h tier):
 batch_embed = DoublewordEmbeddingBatch(model_name="your-embedding-model")
 # vecs = await batch_embed.aget_text_embedding_batch([...])
+
+# Or on the 1h flex tier:
+async_embed = DoublewordEmbeddingAsync(model_name="your-embedding-model")
+# vecs = await async_embed.aget_text_embedding_batch([...])
 ```
 
 ## Use with LlamaIndex

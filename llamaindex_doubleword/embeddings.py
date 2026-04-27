@@ -115,9 +115,19 @@ class DoublewordEmbeddingBatch(DoublewordEmbedding):
     )
     _batch_client: Any = None
 
+    def _autobatcher_client_class(self) -> Any:
+        """Return the autobatcher client class to instantiate.
+
+        Subclasses (:class:`DoublewordEmbeddingAsync`) override this to pick
+        :class:`autobatcher.AsyncOpenAI` instead.
+        """
+        from autobatcher import BatchOpenAI
+
+        return BatchOpenAI
+
     @model_validator(mode="after")
     def _install_autobatcher(self) -> DoublewordEmbeddingBatch:
-        from autobatcher import BatchOpenAI
+        client_class = self._autobatcher_client_class()
 
         api_key: str | None = self.api_key
         if api_key is None:
@@ -136,7 +146,7 @@ class DoublewordEmbeddingBatch(DoublewordEmbedding):
         if self.max_retries is not None and self.max_retries > 0:
             client_kwargs["max_retries"] = self.max_retries
 
-        self._batch_client = BatchOpenAI(**client_kwargs)
+        self._batch_client = client_class(**client_kwargs)
 
         return self
 
@@ -160,3 +170,29 @@ class DoublewordEmbeddingBatch(DoublewordEmbedding):
         raise NotImplementedError(
             "DoublewordEmbeddingBatch is async-only. Use `aget_query_embedding`."
         )
+
+
+class DoublewordEmbeddingAsync(DoublewordEmbeddingBatch):
+    """Doubleword embeddings on the **1-hour async (flex)** completion window.
+
+    Identical surface to :class:`DoublewordEmbeddingBatch`, but pinned to
+    Doubleword's flex tier: results return within an hour instead of next-day,
+    at a price between realtime and 24-hour batch. Backed by
+    :class:`autobatcher.AsyncOpenAI`.
+
+    Async-only. Use ``aget_text_embedding`` / ``aget_text_embedding_batch``.
+    """
+
+    completion_window: Literal["24h", "1h"] = Field(
+        default="1h",
+        description=(
+            "Doubleword completion window. Defaults to '1h' (flex/async tier). "
+            "Override to '24h' to fall back to the deepest-discount batch tier. "
+            "Forwarded to autobatcher.AsyncOpenAI."
+        ),
+    )
+
+    def _autobatcher_client_class(self) -> Any:
+        from autobatcher import AsyncOpenAI
+
+        return AsyncOpenAI
