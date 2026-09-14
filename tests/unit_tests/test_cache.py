@@ -4,7 +4,7 @@ from typing import Any
 
 import httpx
 import pytest
-from llama_index.core.base.llms.types import ChatMessage
+from llama_index.core.base.llms.types import ChatMessage, ImageBlock, TextBlock
 from pydantic import ValidationError
 
 from llamaindex_doubleword import DoublewordLLM, DoublewordLLMAsync, DoublewordLLMBatch
@@ -130,7 +130,11 @@ def test_marks_last_text_block() -> None:
         }
     ]
     apply_cache_control({"messages": messages}, EPHEMERAL)
-    assert messages[0]["content"] == [{"type": "text", "text": "a"}, *_marked("b", EPHEMERAL), image]
+    assert messages[0]["content"] == [
+        {"type": "text", "text": "a"},
+        *_marked("b", EPHEMERAL),
+        image,
+    ]
 
 
 def test_skips_target_without_text() -> None:
@@ -187,6 +191,48 @@ def test_tool_markers_count_toward_the_limit() -> None:
     )
     assert bodies[0]["tools"] == tools
     assert _contents(bodies[0]["messages"]) == [_marked("stable", EPHEMERAL), "q"]
+
+
+def test_additional_kwargs_tool_markers_count_toward_the_limit() -> None:
+    bodies: list[dict[str, Any]] = []
+    tools = [
+        {"type": "function", "function": {"name": f"t{i}"}, "cache_control": FIVE_MINUTES}
+        for i in range(3)
+    ]
+    llm = _llm(bodies, cache_control=EPHEMERAL, additional_kwargs={"tools": tools})
+    llm.chat([ChatMessage(role="system", content="stable"), ChatMessage(role="user", content="q")])
+    assert bodies[0]["tools"] == tools
+    assert _contents(bodies[0]["messages"]) == [_marked("stable", EPHEMERAL), "q"]
+
+
+def test_caller_owned_content_is_not_mutated() -> None:
+    blocks = [{"type": "text", "text": "a"}, {"type": "text", "text": "b"}]
+    before = copy.deepcopy(blocks)
+    for _ in range(2):
+        apply_cache_control({"messages": [{"role": "user", "content": blocks}]}, EPHEMERAL)
+    assert blocks == before
+
+
+def test_caller_messages_are_unchanged_after_two_calls() -> None:
+    bodies: list[dict[str, Any]] = []
+    llm = _llm(bodies, cache_control=EPHEMERAL)
+    url = "https://example.com/x.png"
+    history = [
+        ChatMessage(role="system", content="stable"),
+        ChatMessage(role="user", blocks=[TextBlock(text="q1"), ImageBlock(url=url)]),
+    ]
+    before = [message.model_dump() for message in history]
+    llm.chat(history)
+    history += [ChatMessage(role="assistant", content="a1"), ChatMessage(role="user", content="q2")]
+    llm.chat(history)
+    assert [message.model_dump() for message in history[:2]] == before
+    # Markers do not accumulate: the second request still carries exactly two.
+    assert _contents(bodies[1]["messages"]) == [
+        _marked("stable", EPHEMERAL),
+        [{"type": "text", "text": "q1"}, {"type": "image_url", "image_url": {"url": url}}],
+        "a1",
+        _marked("q2", EPHEMERAL),
+    ]
 
 
 @pytest.mark.parametrize(
