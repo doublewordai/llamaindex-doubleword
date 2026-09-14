@@ -80,7 +80,16 @@ addopts = "--strict-markers --strict-config --durations=5"
 asyncio_mode = "auto"
 
 [tool.mypy]
-python_version = "3.11"
+# 3.12 matches the interpreter the checks run on; numpy's bundled stubs no
+# longer parse under a 3.11 target.
+python_version = "3.12"
 strict = true
 warn_unused_ignores = true
 disallow_untyped_defs = true
+# LlamaIndex ships no py.typed marker for these integration packages, so their
+# base classes arrive as Any and strict mode refuses to subclass them.
+disallow_subclassing_any = false
+
+[[tool.mypy.overrides]]
+module = ["llama_index.*", "autobatcher.*"]
+ignore_missing_imports = true

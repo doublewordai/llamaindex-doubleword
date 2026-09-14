@@ -163,6 +163,54 @@ All the autobatcher tuning knobs above apply unchanged. The only difference
 from `DoublewordLLMBatch` is the default `completion_window` (`"1h"` vs
 `"24h"`); the same `DoublewordEmbeddingAsync` exists on the embeddings side.
 
+## Prompt caching
+
+Pass `prompt_cache=True` and a large, stable system prompt is cached and
+reused across calls:
+
+```python
+from llama_index.core.llms import ChatMessage
+from llamaindex_doubleword import DoublewordLLM
+
+llm = DoublewordLLM(model="your-model-name", prompt_cache=True)
+
+response = llm.chat([
+    ChatMessage(role="system", content="…large, stable instructions…"),
+    ChatMessage(role="user", content="What is 2 + 2?"),
+])
+
+usage = response.raw.usage
+print(usage.cache_creation_input_tokens)  # tokens written on a cold call
+print(usage.cache_read_input_tokens)      # tokens read on a warm call
+print(usage.prompt_tokens_details.cached_tokens)  # same read count, OpenAI field
+```
+
+`prompt_cache` also takes a config dict:
+
+| Key     | Values                                    | Default    |
+|---------|-------------------------------------------|------------|
+| `ttl`   | `"5m"`, `"1h"`                            | `"1h"`     |
+| `scope` | `"system"`, `"lastUser"`, list of indices | `"system"` |
+
+```python
+# Cache the last user message for five minutes instead.
+llm = DoublewordLLM(
+    model="your-model-name",
+    prompt_cache={"ttl": "5m", "scope": "lastUser"},
+)
+
+# Or mark exact message indices.
+llm = DoublewordLLM(model="your-model-name", prompt_cache={"scope": [0, 2]})
+```
+
+Leave `prompt_cache` unset to send messages untouched, which is what you want
+if you are attaching `cache_control` blocks by hand. It works the same on
+`DoublewordLLMBatch` and `DoublewordLLMAsync`, and across `chat`, `complete`,
+their streaming forms, and the async variants of all four.
+
+See the [prompt caching guide](https://docs.doubleword.ai/inference-api/prompt-caching)
+for how the cache itself behaves.
+
 ## Embeddings
 
 ```python
