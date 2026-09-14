@@ -35,11 +35,7 @@ from llama_index.llms.openai.utils import to_openai_message_dicts
 from llama_index.llms.openai_like import OpenAILike
 from pydantic import Field, model_validator
 
-from llamaindex_doubleword._cache import (
-    CacheOption,
-    apply_cache_control,
-    normalize_cache_config,
-)
+from llamaindex_doubleword._cache import CacheControl, apply_cache_control
 from llamaindex_doubleword._credentials import resolve_api_key
 
 DEFAULT_DOUBLEWORD_API_BASE = "https://api.doubleword.ai/v1"
@@ -72,27 +68,14 @@ class DoublewordLLM(OpenAILike):
             llm = DoublewordLLM(model="your-model")
             response = llm.complete("Hello, world.")
             print(response.text)
-
-    Prompt caching:
-        Pass ``prompt_cache=True`` to cache the system prefix for an hour, or
-        a config dict to tune it. See
-        https://docs.doubleword.ai/inference-api/prompt-caching.
-
-        .. code-block:: python
-
-            llm = DoublewordLLM(model="your-model", prompt_cache={"ttl": "5m"})
     """
 
     is_chat_model: bool = True
     is_function_calling_model: bool = True
     context_window: int = 128000
-    prompt_cache: CacheOption | None = Field(
+    cache_control: CacheControl | None = Field(
         default=None,
-        description=(
-            "Prompt caching. `True` caches the system prefix for '1h'; a dict "
-            "tunes `ttl` ('5m' or '1h') and `scope` ('system', 'lastUser', or "
-            "explicit message indices). `None`/`False` sends messages untouched."
-        ),
+        description="Prompt caching marker for the last system message and the latest message.",
     )
 
     def __init__(self, **kwargs: Any) -> None:
@@ -110,49 +93,30 @@ class DoublewordLLM(OpenAILike):
         md = super().metadata
         return md
 
-    # -- Prompt caching --
-    #
-    # LlamaIndex converts a ``ChatMessage`` with ``to_openai_message_dicts``,
-    # which flattens text-only messages to a plain string and drops anything it
-    # does not recognise, so ``cache_control`` cannot ride along on a message.
-    # Instead we convert the messages ourselves, stamp the breakpoint on, and
-    # hand the result to the OpenAI client as ``extra_body``, which is shallow
-    # merged over the request body and so replaces ``messages`` on the wire.
-    # ``_chat`` / ``_stream_chat`` / ``_achat`` / ``_astream_chat`` are the only
-    # four places LlamaIndex calls ``/chat/completions``, and both ``chat`` and
-    # ``complete`` funnel through them, so hooking them covers every entry
-    # point without restating any request logic. ``autobatcher`` merges
-    # ``extra_body`` the same way, so the batch variants inherit this unchanged.
-
+    # LlamaIndex drops cache_control when it converts messages,
+    # so the marked messages are sent through extra_body instead.
     def _cache_kwargs(
         self, messages: Sequence[ChatMessage], kwargs: dict[str, Any]
     ) -> dict[str, Any]:
-        """Add the cache-marked ``messages`` to ``extra_body``, if caching is on."""
-        config = normalize_cache_config(self.prompt_cache)
-        if config is None:
+        cache_control = kwargs.get("cache_control", self.cache_control)
+        if cache_control is None:
             return kwargs
-        message_dicts = to_openai_message_dicts(messages, model=self.model)
-        if not isinstance(message_dicts, list):
-            return kwargs
-        payload = apply_cache_control(
-            {"messages": cast(list[dict[str, Any]], message_dicts)}, config
-        )
-        extra_body = {**kwargs.get("extra_body", {}), "messages": payload["messages"]}
+        payload = {
+            "messages": to_openai_message_dicts(messages, model=self.model),
+            # additional_kwargs wins over per-call kwargs on the wire, so count its tools.
+            "tools": self.additional_kwargs.get("tools", kwargs.get("tools")),
+        }
+        apply_cache_control(payload, cache_control)
+        extra_body = {**(kwargs.get("extra_body") or {}), "messages": payload["messages"]}
         return {**kwargs, "extra_body": extra_body}
 
     def _get_model_kwargs(self, **kwargs: Any) -> dict[str, Any]:
-        """Compose a per-call ``extra_body`` with ``additional_kwargs``.
-
-        The base implementation lets ``additional_kwargs`` overwrite per-call
-        kwargs wholesale, which would drop the cache payload for anyone who also
-        sets ``additional_kwargs={"extra_body": ...}``. Merge them instead.
-        """
+        kwargs.pop("cache_control", None)
         all_kwargs: dict[str, Any] = super()._get_model_kwargs(**kwargs)
-        per_call = kwargs.get("extra_body")
-        if per_call:
+        if kwargs.get("extra_body"):
             all_kwargs["extra_body"] = {
                 **self.additional_kwargs.get("extra_body", {}),
-                **per_call,
+                **kwargs["extra_body"],
             }
         return all_kwargs
 
