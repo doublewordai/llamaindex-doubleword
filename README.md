@@ -9,7 +9,7 @@ LLM / embedding models and **transparently-batched** variants powered by
 
 The batched variants are required to access models that Doubleword exposes
 **only via the batch API**, and they cut cost on workloads that fan out
-many concurrent calls — typically the case in agentic workflows.
+many concurrent calls, which is typical of agentic workflows.
 
 ## Installation
 
@@ -29,7 +29,7 @@ Three resolution paths, in precedence order:
    ```bash
    export DOUBLEWORD_API_KEY=sk-...
    ```
-3. **`~/.dw/credentials.toml`** — the same file written by Doubleword's CLI
+3. **`~/.dw/credentials.toml`**: the same file written by Doubleword's CLI
    tooling. The active account is selected by `~/.dw/config.toml`'s
    `active_account` field, and `inference_key` from that account is used.
 
@@ -44,7 +44,7 @@ Three resolution paths, in precedence order:
    ```
 
    To use a non-active account from your credentials file, set
-   `DOUBLEWORD_API_KEY` directly to that account's `inference_key` — there
+   `DOUBLEWORD_API_KEY` directly to that account's `inference_key`. There
    is no `account=` selector on the model itself.
 
 ## LLMs
@@ -62,7 +62,7 @@ response = llm.complete("Explain bismuth in three sentences.")
 print(response.text)
 ```
 
-Tool calling is supported — use with LlamaIndex's agent framework:
+Tool calling is supported. Use it with LlamaIndex's agent framework:
 
 ```python
 from llama_index.core.agent.workflow import AgentWorkflow
@@ -87,7 +87,7 @@ print(response)
 
 Same interface, but every concurrent `.acomplete()` / `.achat()` call is
 collected by `autobatcher` and submitted via Doubleword's batch endpoint.
-**Async-only** — sync calls raise.
+**Async-only**: sync calls raise.
 
 Use this when:
 
@@ -140,7 +140,7 @@ The same arguments are available on `DoublewordEmbeddingBatch`.
 A thin subclass of `DoublewordLLMBatch` pinned to Doubleword's **flex
 (1-hour)** completion window. Backed by `autobatcher.AsyncOpenAI` rather
 than `BatchOpenAI`. Use this when 24-hour batch turnaround is too slow but
-realtime cost is too high — typical for fan-out workflows that need results
+realtime cost is too high, which is typical for fan-out workflows that need results
 within minutes-to-an-hour.
 
 ```python
@@ -162,6 +162,31 @@ asyncio.run(main())
 All the autobatcher tuning knobs above apply unchanged. The only difference
 from `DoublewordLLMBatch` is the default `completion_window` (`"1h"` vs
 `"24h"`); the same `DoublewordEmbeddingAsync` exists on the embeddings side.
+
+## Prompt caching
+
+```python
+from llama_index.core.llms import ChatMessage
+from llamaindex_doubleword import DoublewordLLM
+
+llm = DoublewordLLM(model="your-model-name", cache_control={"type": "ephemeral", "ttl": "1h"})
+
+response = llm.chat([
+    ChatMessage(role="system", content="<large, stable instructions>"),
+    ChatMessage(role="user", content="How do I reset my password?"),
+])
+print(response.raw.usage.cache_read_input_tokens)
+```
+
+`ttl` is `"5m"` or `"1h"` and is optional. The API default is `"5m"`.
+
+The marker goes on the last system message and on the latest message of every request.
+LlamaIndex strips `cache_control` from hand-built message content, so set it with this option.
+
+Pass `cache_control` to `chat` or `complete` to override it for one call. `cache_control=None`
+skips caching for that call.
+
+See the [prompt caching guide](https://docs.doubleword.ai/inference-api/prompt-caching).
 
 ## Embeddings
 
@@ -206,7 +231,7 @@ response = query_engine.query("What is this about?")
 |-------------|----------------------|----------------------------------|
 | `api_key`   | `DOUBLEWORD_API_KEY` | _required_                       |
 | `api_base`  | `DOUBLEWORD_API_BASE`| `https://api.doubleword.ai/v1`   |
-| `model`     | —                    | _required_                       |
+| `model`     | n/a                  | _required_                       |
 
 All other arguments accepted by `llama_index.llms.openai_like.OpenAILike` are
 forwarded unchanged (`temperature`, `max_tokens`, `timeout`, etc.).

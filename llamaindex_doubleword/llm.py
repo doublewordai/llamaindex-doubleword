@@ -22,11 +22,20 @@ Three classes are exposed:
 from __future__ import annotations
 
 import os
-from typing import Any, Literal
+from collections.abc import Sequence
+from typing import Any, Literal, cast
 
+from llama_index.core.base.llms.types import (
+    ChatMessage,
+    ChatResponse,
+    ChatResponseAsyncGen,
+    ChatResponseGen,
+)
+from llama_index.llms.openai.utils import to_openai_message_dicts
 from llama_index.llms.openai_like import OpenAILike
-from pydantic import Field, SecretStr, model_validator
+from pydantic import Field, model_validator
 
+from llamaindex_doubleword._cache import CacheControl, apply_cache_control
 from llamaindex_doubleword._credentials import resolve_api_key
 
 DEFAULT_DOUBLEWORD_API_BASE = "https://api.doubleword.ai/v1"
@@ -64,6 +73,10 @@ class DoublewordLLM(OpenAILike):
     is_chat_model: bool = True
     is_function_calling_model: bool = True
     context_window: int = 128000
+    cache_control: CacheControl | None = Field(
+        default=None,
+        description="Prompt caching marker for the last system message and the latest message.",
+    )
 
     def __init__(self, **kwargs: Any) -> None:
         # Apply Doubleword defaults before calling the parent constructor.
@@ -79,6 +92,56 @@ class DoublewordLLM(OpenAILike):
     def metadata(self) -> Any:
         md = super().metadata
         return md
+
+    # LlamaIndex drops cache_control when it converts messages,
+    # so the marked messages are sent through extra_body instead.
+    def _cache_kwargs(
+        self, messages: Sequence[ChatMessage], kwargs: dict[str, Any]
+    ) -> dict[str, Any]:
+        cache_control = kwargs.get("cache_control", self.cache_control)
+        if cache_control is None:
+            return kwargs
+        payload = {
+            "messages": to_openai_message_dicts(messages, model=self.model),
+            # additional_kwargs wins over per-call kwargs on the wire, so count its tools.
+            "tools": self.additional_kwargs.get("tools", kwargs.get("tools")),
+        }
+        apply_cache_control(payload, cache_control)
+        extra_body = {**(kwargs.get("extra_body") or {}), "messages": payload["messages"]}
+        return {**kwargs, "extra_body": extra_body}
+
+    def _get_model_kwargs(self, **kwargs: Any) -> dict[str, Any]:
+        kwargs.pop("cache_control", None)
+        all_kwargs: dict[str, Any] = super()._get_model_kwargs(**kwargs)
+        if kwargs.get("extra_body"):
+            all_kwargs["extra_body"] = {
+                **self.additional_kwargs.get("extra_body", {}),
+                **kwargs["extra_body"],
+            }
+        return all_kwargs
+
+    def _chat(self, messages: Sequence[ChatMessage], **kwargs: Any) -> ChatResponse:
+        return cast(ChatResponse, super()._chat(messages, **self._cache_kwargs(messages, kwargs)))
+
+    def _stream_chat(self, messages: Sequence[ChatMessage], **kwargs: Any) -> ChatResponseGen:
+        return cast(
+            ChatResponseGen,
+            super()._stream_chat(messages, **self._cache_kwargs(messages, kwargs)),
+        )
+
+    async def _achat(self, messages: Sequence[ChatMessage], **kwargs: Any) -> ChatResponse:
+        return cast(
+            ChatResponse,
+            await super()._achat(messages, **self._cache_kwargs(messages, kwargs)),
+        )
+
+    async def _astream_chat(
+        self, messages: Sequence[ChatMessage], **kwargs: Any
+    ) -> ChatResponseAsyncGen:
+        return cast(
+            ChatResponseAsyncGen,
+            await super()._astream_chat(messages, **self._cache_kwargs(messages, kwargs)),
+        )
 
 
 class DoublewordLLMBatch(DoublewordLLM):

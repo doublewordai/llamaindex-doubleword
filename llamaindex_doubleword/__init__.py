@@ -7,6 +7,7 @@ transparently-batched variants powered by ``autobatcher``.
 
 from importlib import metadata
 
+from llamaindex_doubleword._cache import CacheControl
 from llamaindex_doubleword.embeddings import (
     DoublewordEmbedding,
     DoublewordEmbeddingAsync,
@@ -27,6 +28,7 @@ del metadata
 
 __all__ = [
     "DEFAULT_DOUBLEWORD_API_BASE",
+    "CacheControl",
     "DoublewordEmbedding",
     "DoublewordEmbeddingAsync",
     "DoublewordEmbeddingBatch",
